@@ -1,0 +1,16 @@
+{
+  "name": "polymarket-arb-bot",
+  "version": "1.0.0",
+  "description": "Polymarket binary market arbitrage bot (event-driven)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "undici": "^7.0.0",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
