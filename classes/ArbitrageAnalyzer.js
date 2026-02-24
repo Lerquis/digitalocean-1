@@ -77,7 +77,7 @@ class ArbitrageAnalyzer {
     }
 
     this.log.info(
-      `Tracking market: ${marketInfo.slug} | YES=${this.yesTokenId} | NO=${this.noTokenId}`
+      `Tracking market: ${marketInfo.slug} | YES=${this.yesTokenId} | NO=${this.noTokenId}`,
     );
   }
 
@@ -120,7 +120,7 @@ class ArbitrageAnalyzer {
             `\n   YES ask : $${yesAsk.toFixed(4)}` +
             `\n   NO  ask : $${noAsk.toFixed(4)}` +
             `\n   Combined: $${combinedAsk.toFixed(4)} (< $1.00)` +
-            `\n   Profit  : ${profitCents}¢ per $1 contract (${profitPct}%)\n`
+            `\n   Profit  : ${profitCents}¢ per $1 contract (${profitPct}%)\n`,
         );
 
         this.bus.emit("arbitrage:detected", {
@@ -148,7 +148,7 @@ class ArbitrageAnalyzer {
             `\n   YES bid : $${yesBid.toFixed(4)}` +
             `\n   NO  bid : $${noBid.toFixed(4)}` +
             `\n   Combined: $${combinedBid.toFixed(4)} (> $1.00)` +
-            `\n   Profit  : ${profitCents}¢ per $1 contract (${profitPct}%)\n`
+            `\n   Profit  : ${profitCents}¢ per $1 contract (${profitPct}%)\n`,
         );
 
         this.bus.emit("arbitrage:detected", {
@@ -164,16 +164,16 @@ class ArbitrageAnalyzer {
     }
 
     // ── SPREAD SUMMARY (always log current best prices) ──────────────────────
-    if (yesBid !== null || yesAsk !== null || noBid !== null || noAsk !== null) {
-      const fmt = (v) => (v !== null ? `$${v.toFixed(4)}` : "   --  ");
-      console.log(
-        `[PRICES] ${new Date(timestamp).toISOString()}` +
-          ` | YES bid=${fmt(yesBid)} ask=${fmt(yesAsk)}` +
-          ` | NO  bid=${fmt(noBid)} ask=${fmt(noAsk)}` +
-          ` | askSum=${yesAsk !== null && noAsk !== null ? (yesAsk + noAsk).toFixed(4) : "--"}` +
-          ` | bidSum=${yesBid !== null && noBid !== null ? (yesBid + noBid).toFixed(4) : "--"}`
-      );
-    }
+    // if (yesBid !== null || yesAsk !== null || noBid !== null || noAsk !== null) {
+    //   const fmt = (v) => (v !== null ? `$${v.toFixed(4)}` : "   --  ");
+    //   console.log(
+    //     `[PRICES] ${new Date(timestamp).toISOString()}` +
+    //       ` | YES bid=${fmt(yesBid)} ask=${fmt(yesAsk)}` +
+    //       ` | NO  bid=${fmt(noBid)} ask=${fmt(noAsk)}` +
+    //       ` | askSum=${yesAsk !== null && noAsk !== null ? (yesAsk + noAsk).toFixed(4) : "--"}` +
+    //       ` | bidSum=${yesBid !== null && noBid !== null ? (yesBid + noBid).toFixed(4) : "--"}`
+    //   );
+    // }
   }
 }
 
