@@ -1,18 +1,16 @@
 const WebSocket = require("ws");
 
-const WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/market";
+const WS_URL = "wss://ws-live-data.polymarket.com/";
 const PING_INTERVAL = 30000;
 
-class MarketStream {
+class ActivityStream {
   constructor(bus, logger) {
     this.bus = bus;
-    this.log = logger.create("MarketStream");
+    this.log = logger.create("ActivityStream");
     this.ws = null;
     this.pingInterval = null;
-    // Pre-serialized subscription message — built once on market:discovered,
-    // sent as a raw Buffer on every (re)connect. Saves ~1-2ms of JSON.stringify
-    // overhead that would otherwise happen on the hot path (ws "open" handler).
-    this.subscriptionBuffer = null;
+    this.eventSlug = null;
+    this.namesToTack = ["distinct-baguette"];
 
     // Latency tracking
     this.connectAt = null; // when new WebSocket() was called
@@ -21,13 +19,8 @@ class MarketStream {
     this.pingSentAt = null; // when the last ping was sent
 
     this.bus.on("market:discovered", (marketInfo) => {
-      const assetIds = [marketInfo.yes_token_id, marketInfo.no_token_id].filter(
-        Boolean,
-      );
-      this.subscriptionBuffer = Buffer.from(
-        JSON.stringify({ type: "market", assets_ids: assetIds }),
-      );
-      this.log.info(`Subscribing to assets: ${assetIds.join(", ")}`);
+      this.eventSlug = marketInfo.slug;
+      this.log.info(`Connecting for slug: ${this.eventSlug}`);
       this.connect();
     });
 
@@ -51,31 +44,39 @@ class MarketStream {
       const connMs = Date.now() - this.connectAt;
       this.openAt = Date.now();
 
-      // Send pre-built Buffer — no serialization on the hot path
-      this.ws.send(this.subscriptionBuffer);
+      const subscriptionMessage = JSON.stringify({
+        action: "subscribe",
+        subscriptions: [
+          {
+            topic: "activity",
+            type: "*",
+            filters: `{"event_slug":"${this.eventSlug}"}`,
+          },
+        ],
+      });
+
+      this.ws.send(subscriptionMessage);
       this.log.info(`Connected & subscribed [conn: ${connMs}ms]`);
 
       this.pingInterval = setInterval(() => {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           this.pingSentAt = Date.now();
-          this.ws.ping();
+          this.ws.send(JSON.stringify({ type: "ping" }));
         }
       }, PING_INTERVAL);
     });
 
-    // Ping round-trip time — measures actual network latency to Polymarket WS
     this.ws.on("pong", () => {
       if (this.pingSentAt !== null) {
         const rttMs = Date.now() - this.pingSentAt;
         this.pingSentAt = null;
-        this.log.info(`WS ping RTT: ${rttMs}ms`);
+        this.log.info(`WS ping (pong) RTT: ${rttMs}ms`);
       }
     });
 
     this.ws.on("message", (data) => {
       const now = Date.now();
 
-      // Latency tag: first message shows time-since-open; subsequent show delta
       let latencyTag;
       if (this.lastMsgAt === null) {
         latencyTag = `first-msg: +${now - this.openAt}ms`;
@@ -85,7 +86,6 @@ class MarketStream {
       this.lastMsgAt = now;
 
       const raw = data.toString();
-      // console.log(`[WS] [${new Date(now).toISOString()}] [${latencyTag}] ${raw}`);
 
       let parsed;
       try {
@@ -94,13 +94,16 @@ class MarketStream {
         return;
       }
 
-      if (parsed.event_type === "price_change" && parsed.price_changes) {
-        const changes = parsed.price_changes.map((c) => ({
-          ...c,
-          timestamp: now,
-        }));
+      // Record pong messages from custom logic
+      if (parsed.type === "pong" && this.pingSentAt !== null) {
+        const rttMs = Date.now() - this.pingSentAt;
+        this.pingSentAt = null;
+        this.log.info(`WS ping RTT: ${rttMs}ms`);
+        return;
+      }
 
-        this.bus.emit("market:price_change", changes);
+      if (parsed.payload && parsed.payload.name.includes(this.namesToTack)) {
+        this.log.info(`[WS Message] [${latencyTag}] ${raw}`);
       }
     });
 
@@ -133,4 +136,4 @@ class MarketStream {
   }
 }
 
-module.exports = MarketStream;
+module.exports = ActivityStream;

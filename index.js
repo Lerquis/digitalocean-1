@@ -1,7 +1,7 @@
 const EventBus = require("./classes/Bus");
 const DataGetter = require("./classes/DataGetter");
 const MarketStream = require("./classes/MarketStream");
-const ArbitrageAnalyzer = require("./classes/ArbitrageAnalyzer");
+const ActivityStream = require("./classes/ActivityStream");
 const logger = require("./utils/logger");
 const { preResolve } = require("./utils/dnsCache");
 
@@ -13,6 +13,7 @@ const log = logger.create("Main");
 const EXTERNAL_HOSTS = [
   "polymarket.com",
   "ws-subscriptions-clob.polymarket.com",
+  "ws-live-data.polymarket.com",
 ];
 
 async function main() {
@@ -24,7 +25,7 @@ async function main() {
 
   // ── Wire up modules ────────────────────────────────────────────────────────
   new MarketStream(bus, logger);
-  new ArbitrageAnalyzer(bus, logger);
+  new ActivityStream(bus, logger);
 
   // ── Debug listeners ────────────────────────────────────────────────────────
   bus.on("market:discovered", (info) => {
@@ -32,7 +33,9 @@ async function main() {
   });
 
   bus.on("market:waiting", ({ slug, endsAt, waitSeconds }) => {
-    log.info(`Waiting for market to expire: ${slug} | ends ${endsAt} (${waitSeconds}s)`);
+    log.info(
+      `Waiting for market to expire: ${slug} | ends ${endsAt} (${waitSeconds}s)`,
+    );
   });
 
   bus.on("market:expired", ({ slug }) => {
@@ -41,7 +44,7 @@ async function main() {
 
   bus.on("arbitrage:detected", (arb) => {
     log.info(
-      `Arbitrage event — type=${arb.type} profit=${(arb.profit * 100).toFixed(2)}¢ at=${arb.detectedAt}`
+      `Arbitrage event — type=${arb.type} profit=${(arb.profit * 100).toFixed(2)}¢ at=${arb.detectedAt}`,
     );
   });
 
