@@ -1,7 +1,12 @@
+require("dotenv").config();
 const EventBus = require("./classes/Bus");
+const { ClobClient } = require("@polymarket/clob-client");
+const { Wallet } = require("@ethersproject/wallet");
 const DataGetter = require("./classes/DataGetter");
 const MarketStream = require("./classes/MarketStream");
-const ActivityStream = require("./classes/ActivityStream");
+// const ActivityStream = require("./classes/ActivityStream");
+const MarketMaker = require("./classes/MarketMaker");
+const VirtualOrderManager = require("./classes/VirtualOrderManager");
 const logger = require("./utils/logger");
 const { preResolve } = require("./utils/dnsCache");
 
@@ -21,11 +26,15 @@ async function main() {
   await preResolve(...EXTERNAL_HOSTS);
   log.info(`DNS cached: ${EXTERNAL_HOSTS.join(", ")}`);
 
+  // ──────────────────────────────────────────────────────────────────────────
+
   const bus = new EventBus();
 
   // ── Wire up modules ────────────────────────────────────────────────────────
   new MarketStream(bus, logger);
-  new ActivityStream(bus, logger);
+  // new ActivityStream(bus, logger);
+  new MarketMaker(bus, logger);
+  new VirtualOrderManager(bus, logger);
 
   // ── Debug listeners ────────────────────────────────────────────────────────
   bus.on("market:discovered", (info) => {

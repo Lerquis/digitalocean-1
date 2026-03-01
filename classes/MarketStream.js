@@ -102,6 +102,9 @@ class MarketStream {
 
         this.bus.emit("market:price_change", changes);
       }
+      if (parsed.event_type === "book") {
+        this.bus.emit("market:book", parsed);
+      }
     });
 
     this.ws.on("error", (err) => {
