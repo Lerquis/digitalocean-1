@@ -44,17 +44,17 @@ class MarketMaker {
     const noCost = this.inventory.no.qty * this.inventory.no.avg;
     const totalInvested = yesCost + noCost;
 
-    this.log.info(`[MARKET EXPIRED] Position PnL Summary:`);
-    this.log.info(
+    this.log.summary(`[MARKET EXPIRED] Position PnL Summary:`);
+    this.log.summary(
       `   - Total YES: ${this.inventory.yes.qty.toFixed(2)} units (Cost Avg: $${this.inventory.yes.avg.toFixed(4)}) -> $${yesCost.toFixed(2)} invested.`,
     );
-    this.log.info(
+    this.log.summary(
       `   - Total NO: ${this.inventory.no.qty.toFixed(2)} units (Cost Avg: $${this.inventory.no.avg.toFixed(4)}) -> $${noCost.toFixed(2)} invested.`,
     );
-    this.log.info(
+    this.log.summary(
       `   => Theoretical Total Invested: $${totalInvested.toFixed(2)}`,
     );
-    this.log.info(
+    this.log.summary(
       `   => If winning side, payout: $${(Math.max(this.inventory.yes.qty, this.inventory.no.qty) * 1).toFixed(2)}`,
     );
 
