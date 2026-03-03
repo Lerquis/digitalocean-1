@@ -13,12 +13,15 @@ class VirtualOrderManager {
     this.msMin = 0;
     this.msMax = 0;
 
-    // We hardcode order size for now
-    this.defaultOrderSize = 10;
-
     // Listen to MarketMaker emitting new quotes
     this.bus.on("marketmaker:quotes", (data) => {
-      this.handleNewQuotes(data.assetId, data.assetSide, data.type, data.price);
+      this.handleNewQuotes(
+        data.assetId,
+        data.assetSide,
+        data.type,
+        data.price,
+        data.size,
+      );
     });
 
     // Listen to market ticks to simulate fills
@@ -39,9 +42,22 @@ class VirtualOrderManager {
     );
   }
 
-  handleNewQuotes(assetId, assetSide, type, price) {
+  handleNewQuotes(assetId, assetSide, type, price, size) {
     // If quote hasn't really changed or is missing, skip
-    if (price === undefined) return;
+    if (price === undefined || size === undefined) return;
+
+    // --- NEW: Risk Boundaries Overriding ---
+    // If size dictates '0', we force-cancel any active order on this side and halt.
+    if (size === 0) {
+      if (this.activeOrders[assetSide]) {
+        clearTimeout(this.activeOrders[assetSide].timerId);
+        this.activeOrders[assetSide] = null;
+        this.log.info(
+          `[VOM] ⚠️ Risk boundary hit! Withdrawing BIDs for ${assetSide.toUpperCase()}`,
+        );
+      }
+      return;
+    }
 
     // Check if we already have an active order on this side (and type, e.g. "yes-BID" and "yes-ASK")
     // Note: User says "We could have a YES and NO order at the same time, but never 2 YES or 2 NO".
@@ -74,12 +90,12 @@ class VirtualOrderManager {
         side: assetSide,
         type: type,
         price: price,
-        size: this.defaultOrderSize,
+        size: size, // Dynamic Size from MarketMaker Risk Bounds
         createdAt: Date.now(),
       };
 
       this.log.info(
-        `[VOM] Placed Limit Order | Token: ${assetSide.toUpperCase()} | Type: ${type} | Price: ${price.toFixed(4)} | Size: ${this.defaultOrderSize} | Delay: ${delay}ms`,
+        `[VOM] Placed Limit Order | Token: ${assetSide.toUpperCase()} | Type: ${type} | Price: ${price.toFixed(4)} | Size: ${size} | Delay: ${delay}ms`,
       );
       // Removed log spam: this._logState();
     }, delay);

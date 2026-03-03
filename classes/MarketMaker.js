@@ -14,6 +14,13 @@ class MarketMaker {
     this.riskFactor = 0.05;
     this.spreadMargin = 0.01;
 
+    // Hard Boundaries & Risk Parameters
+    this.maxOrderSize = parseInt(process.env.MAX_ORDER_SIZE || "20");
+    this.minOrderSize = parseInt(process.env.MIN_ORDER_SIZE || "5");
+    this.baseRiskAllowance = parseFloat(
+      process.env.BASE_RISK_ALLOWANCE || "10",
+    );
+
     this.bus.on("market:discovered", (marketInfo) => {
       this.yesTokenId = marketInfo.yes_token_id;
       this.noTokenId = marketInfo.no_token_id;
@@ -141,21 +148,22 @@ class MarketMaker {
 
     // Quote generation
     const quotes = this.getBidAskPrices(reservationPrice);
-    // Instead of emitting the combined YES and NO quotes like before
-    // We actually quote both sides of the asset we are receiving events for
+
+    // Dynamic Sizing (Risk Bounds Engine)
+    const allowedSize = this.calculateDynamicSize(side, quotes.bid);
 
     // Let's emit to the virtual order manager
-    // A Market Maker generally places BOTH Bid and Ask limit orders simultaneously
-
+    // Pass the strictly calculated size limits instead of blindly relying on defaults
     this.bus.emit("marketmaker:quotes", {
       assetId: bookEvent.asset_id,
       assetSide: side,
       type: "BID",
       price: quotes.bid,
+      size: allowedSize, // New injected logic
     });
 
     this.log.info(
-      `[BOOK ${side.toUpperCase()}] Bid: ${bestBidPrice.toFixed(4)} (${bestBidSize}) | Ask: ${bestAskPrice.toFixed(4)} (${bestAskSize}) | Spread: ${spread.toFixed(4)} | Mid: ${midPrice.toFixed(4)} | Micro: ${microPrice.toFixed(4)} | Imb: ${imbalancePct.toFixed(2)}% | Res: ${reservationPrice.toFixed(4)} | MMBid: ${quotes.bid.toFixed(4)}`,
+      `[BOOK ${side.toUpperCase()}] Bid: ${bestBidPrice.toFixed(4)}... MMBid: ${quotes.bid.toFixed(4)} | Size Limit: ${allowedSize}`,
     );
   }
 
@@ -173,6 +181,46 @@ class MarketMaker {
     if (totalQty === 0) return 0;
 
     return ((yesQty - noQty) / totalQty) * 100;
+  }
+
+  /**
+   * Calculates the maximum safe amount of shares to buy of a given token side
+   * based on the opposite side's profit cushion, bounded by the API rules.
+   */
+  calculateDynamicSize(targetSide, bidPrice) {
+    const totalInvested =
+      this.inventory.yes.qty * this.inventory.yes.avg +
+      this.inventory.no.qty * this.inventory.no.avg;
+
+    const currentProfitYes = this.inventory.yes.qty - totalInvested;
+    const currentProfitNo = this.inventory.no.qty - totalInvested;
+
+    let theoreticalShares = 0;
+
+    // If we want to buy YES, our cushion relies on the absolute worst-case scenario: NO wins.
+    // So our allowance to buy YES is strictly bounded by (Profit_NO + Base_Risk_Allowance).
+    if (targetSide === "yes") {
+      const budgetUsd = currentProfitNo + this.baseRiskAllowance;
+      theoreticalShares = budgetUsd / bidPrice;
+    }
+    // If we want to buy NO, we rely on the YES cushion.
+    else if (targetSide === "no") {
+      const budgetUsd = currentProfitYes + this.baseRiskAllowance;
+      theoreticalShares = budgetUsd / bidPrice;
+    }
+
+    // Floor numbers so we don't attempt fractional shares
+    let allowedSize = Math.floor(theoreticalShares);
+
+    // Hard ceiling (Max Configured Size by User)
+    allowedSize = Math.min(allowedSize, this.maxOrderSize);
+
+    // Hard floor (Min Limit mandated by Polymarket API)
+    if (allowedSize < this.minOrderSize) {
+      allowedSize = 0; // The execution is paralyzed until the budget recovers
+    }
+
+    return allowedSize;
   }
 
   /**
